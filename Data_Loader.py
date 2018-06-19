@@ -25,7 +25,7 @@ def Data_Loader(train_rate, missing_rate, missing_setting):
 
     #%% 1. Data Preprocessing (Feature, Time, Label)
     # Data Input
-    xy = np.loadtxt("/home/jinsung/Documents/Jinsung/MRNN/data/Complete_RealThree.csv", delimiter=",",skiprows=1)
+    xy = np.loadtxt("/home/jinsung/Documents/Jinsung/MRNN/data/Example.csv", delimiter=",",skiprows=1)
     
     # Label: Diabetes
     y = xy[:,19]    
