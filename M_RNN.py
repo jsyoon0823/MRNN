@@ -21,7 +21,7 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
     hidden_dim = 10
     
     learning_rate = 0.01
-    iterations = 1000
+    iterations = 15000
 
     #%% input place holders
     Y = tf.placeholder(tf.float32, [seq_length, None, 1])
@@ -328,7 +328,7 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
     feature_dim = Dim_No
     
     learning_rate = 0.01
-    iterations = 10000
+    iterations = 50000
 
     hidden_no = int(Dim_No/2)
 
