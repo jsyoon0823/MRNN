@@ -391,3 +391,4 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
     #%%    
     
     return [output_train, output_test]
+
