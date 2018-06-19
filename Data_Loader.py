@@ -30,6 +30,7 @@ def Data_Loader(train_rate, missing_rate, missing_setting):
     # Label: Diabetes
     y = xy[:,19]    
     y[np.where(y<0)] = 0
+    y = y.astype(int)
 
     # Time
     t = xy[:,-1]   
@@ -41,8 +42,7 @@ def Data_Loader(train_rate, missing_rate, missing_setting):
     # Normalization
     xy = MinMaxScaler(xy)
     x = xy
-    
-    
+        
     #%% 2. Introduce Missingness
     
     #%% (1) MCAR Setting
