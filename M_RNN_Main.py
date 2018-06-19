@@ -42,11 +42,11 @@ trainX, trainZ, trainM, trainY, trainT, testX, testZ, testM, testY, testT = Data
 Recover_trainX, Recover_testX = M_RNN.M_RNN(trainX, trainZ, trainM, trainT, testX, testZ, testM, testT)
 
 # 3. Recovery
-New_trainX = (1-trainM) * trainX  + trainM * Recover_trainX
-New_testX  = (1-testM)  * testX   + testM  * Recover_testX
+New_trainX = (trainM) * trainX  + (1-trainM) * Recover_trainX
+New_testX  = (testM)  * testX   + (1-testM)  * Recover_testX
 
 # 4. Imputation Performance Evaluation
-RMSE = np.sqrt( np.sum ( np.square ( testX * testM - Recover_testX * testM ) )  / np.sum(testM) )
+RMSE = np.sqrt( np.sum ( np.square ( testX * (1-testM) - Recover_testX * (1-testM) ) )  / np.sum(1-testM) )
 
 # 5. Prediction
 Prediction = RNN_Basic.RNN_Basic(Recover_trainX, trainY, Recover_testX)
