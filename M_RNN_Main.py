@@ -59,3 +59,4 @@ Eval_Y = np.reshape(testY, [Test_No*Seq_No,])
 New_Y = np.reshape(Prediction, [Test_No*Seq_No,])
 
 AUC = roc_auc_score(Eval_Y, New_Y)
+
