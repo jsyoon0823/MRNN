@@ -27,10 +27,5 @@ Multi-directional Recurrent Neural Networks
 - The details of the M-RNN architecture can be found in the following link.
 - https://arxiv.org/pdf/1711.08742.pdf 
 
-4. RNN_Basic.py
-- Using the imputed time-series data, it predicts time-series binary labels using simple RNN architecture
-- It uses LSTM architecture 
-
-5. M_RNN_Main.py
-- Combine the above four components with various performance metrics
-- It consists of RMSE and AUC metrics. 
+4. M_RNN_Main.py
+- Combine the above four components with RMSE performance metric.
