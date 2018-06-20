@@ -17,14 +17,11 @@ import Data_Loader
 # 2. Imputation Block
 import M_RNN
 
-# 3. Prediction Block
-import RNN_Basic
-
 #%% Parameters
 # train Parameters
 train_rate = 0.8
 missing_rate = 0.2
-missing_setting = 'MAR'
+missing_setting = 'MCAR'
 
 #%% Main
 
@@ -48,15 +45,4 @@ New_testX  = (testM)  * testX   + (1-testM)  * Recover_testX
 # 4. Imputation Performance Evaluation
 RMSE = np.sqrt( np.sum ( np.square ( testX * (1-testM) - Recover_testX * (1-testM) ) )  / np.sum(1-testM) )
 
-# 5. Prediction
-Prediction = RNN_Basic.RNN_Basic(Recover_trainX, trainY, Recover_testX)
-
-# 6. Prediction Performance Evaluation
-Test_No = len(testY)
-Seq_No = len(testY[0])
-
-Eval_Y = np.reshape(testY, [Test_No*Seq_No,])
-New_Y = np.reshape(Prediction, [Test_No*Seq_No,])
-
-AUC = roc_auc_score(Eval_Y, New_Y)
 
