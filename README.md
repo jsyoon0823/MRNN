@@ -1,25 +1,21 @@
 # MRNN
 Multi-directional Recurrent Neural Networks
 
-1. Dataset (Example.csv)
-- This dataset is the example time-series dataset that can be used for testing M-RNN Architecture with Data_Loader.py
-- 20th Column is used as the label 
+1. Datasets (GOOGLE.csv, GOOGLE_Missing.csv)
+- These datasets are the example time-series datasets that can be used for testing M-RNN Architecture with Data_Loader.py
 
 2. Data_Loader.py
-- Using the Raw dataset (Example.csv), it extracts the features, labels, and time information.
+- Using the Raw datasets, it extracts the features and time information.
 - It also divides training and testing sets for further experiments
-- It has three input parameters
+- It has two input parameters
 (1). train_rate: training / testing set ratio
 (2). missing_rate: the amount of introducing missingness
-(3). missing_setting:
-   - MAR: Missing At Random
-   - MCAR: Missing Completely At Random 
-- It has 5 outputs for each training and testing set
+
+- It has 4 outputs for each training and testing set
 (1). X: Original Feature
 (2). Z: Feature with Missing
 (3). M: Missing Matrix
-(4). Y: Label
-(5). T: Time Gap 
+(4). T: Time Gap 
 
 3. M_RNN.py
 - Using the outputs of the Data_Loader.py, it imputes the missing features using M-RNN architecture
@@ -28,4 +24,4 @@ Multi-directional Recurrent Neural Networks
 - https://arxiv.org/pdf/1711.08742.pdf 
 
 4. M_RNN_Main.py
-- Combine the above four components with RMSE performance metric.
+- Combine the above three components with MSE performance metric.
