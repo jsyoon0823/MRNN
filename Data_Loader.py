@@ -1,146 +1,183 @@
 '''
-Jinsung Yoon (06/19/2018)
+Jinsung Yoon (09/06/2018)
 Data Loading
 '''
 
-#%% Packages
+#%% Necessary Packages
 import numpy as np
 
-#%% Main Function
+#%% Google data loading
+
 '''
 1. train_rate: training / testing set ratio
 2. missing_rate: the amount of introducing missingness
-3. missing_setting:
-   - MAR: Missing At Random
-   - MCAR: Missing Completely At Random 
 '''
 
-def Data_Loader(train_rate, missing_rate, missing_setting):
+def Data_Loader_Complete(train_rate = 0.8, missing_rate = 0.2):
     
-    #%% Normalization Function
-    def MinMaxScaler(data):
+    #%% Normalization
+    def MinMaxScaler(data):        
         numerator = data - np.min(data, 0)
         denominator = np.max(data, 0) - np.min(data, 0)
-        return numerator / (denominator + 1e-7)
+        return numerator / (denominator + 1e-8)
 
-    #%% 1. Data Preprocessing (Feature, Time, Label)
-    # Data Input
-    xy = np.loadtxt("/home/jinsung/Documents/Jinsung/MRNN/data/Example.csv", delimiter=",",skiprows=1)
-    
-    # Label: Diabetes
-    y = xy[:,19]    
-    y[np.where(y<0)] = 0
-    y = y.astype(int)
-
-    # Time
-    t = xy[:,-1]   
-    # Yearly Based
-    t = t/365
-    
-    # Feature (Time, Label, ID Delete)
-    xy = np.delete(xy, [0,19,114], axis = 1)
-    # Normalization
+    #%% Data Preprocessing
+    xy = np.loadtxt('/home/jinsung/Documents/Jinsung/MRNN/MRNN_New_Revision/Data/GOOGLE.csv', delimiter = ",",skiprows = 1)
+    xy = xy[::-1]
     xy = MinMaxScaler(xy)
     x = xy
+    
+    #%% Parameters
+    seq_length = 7
+    col_no = len(x[0,:])
+    row_no = len(x[:,0]) - seq_length
+    
+    # Dataset build
+    dataX = []
+    for i in range(0, len(xy[:,0]) - seq_length):
+        _x = x[i:i + seq_length]
+        dataX.append(_x)
         
-    #%% 2. Introduce Missingness
+    #%% Introduce Missingness (MCAR)
     
-    #%% (1) MCAR Setting
-    if missing_setting == 'MCAR':
+    dataZ = []
+    dataM = []
+    dataT = []
+    
+    for i in range(row_no):
         
-        # Missing matrix construct
-        temp_m = np.random.uniform(0,1,[len(x), len(x[0])]) 
-        m = np.zeros([len(x), len(x[0])])
-        m[np.where(temp_m < missing_rate)] = 1
-    
-        # Introduce missingness
-        new_x = np.copy(x)    
-        new_x[np.where(m==1)] = 0       
-    
-    #%% (2) MAR Setting
-    if missing_setting == "MAR":    
+        #%% Missing matrix construct
+        temp_m = np.random.uniform(0,1,[seq_length, col_no]) 
+        m = np.zeros([seq_length, col_no])
+        m[np.where(temp_m >= missing_rate)] = 1
         
-        # Weight initialization for introduce missingness
-        w = np.random.uniform(0., 1., size = [len(x[0]),len(x[0])])
-    
-        # Missing matrix initialization
-        m = np.zeros((len(x),len(x[0])))
-    
-        # For each feature
-        for i in range(len(x[0])):
-            if i == 0:
-                A = np.random.uniform(0., 1., size = [len(x),])
-                B = A > missing_rate
-                m[:,i] = 1.*B
-            if i > 0:
-                New1 = np.matmul(x[:,:(i)]*m[:,:(i)],w[i,:i])
-                New2 = np.matmul(m[:,:i],w[i,:i])
-                New = New1 + New2      
-                New = np.exp(-New)
-            
-                Q = np.percentile(New, 100*missing_rate)
-                B = New > Q
-                m[:,i] = 1.*B
+        dataM.append(m)
         
-        # Introduce missingness
-        new_x = np.copy(x)    
-        new_x[np.where(m==1)] = 0       
-
-    #%% Time Gap Computation
-    
-    td = np.zeros([len(x[:,0]),len(x[0,:])])
-    
-    for i in range(int(len(y)/3)):
-        for j in range(len(x[0,:])):
-            if (i % 3 == 0):
-                td[i,j] = 0
-            elif (m[i-1,j] == 0):
-                td[i,j] = td[i-1,j] + t[i] - t[i-1]
-                
+        #%% Introduce missingness to the original data
+        z = np.copy(dataX[i])    
+        z[np.where(m==0)] = 0
+        
+        dataZ.append(z)
+        
+        #%% Time gap generation
+        t = np.ones([seq_length, col_no])
+        for j in range(col_no):
+            for k in range(seq_length):
+                if (k > 0):
+                    if (m[k,j] == 0):
+                        t[k,j] = t[k-1,j] + 1
+                        
+        dataT.append(t)
         
     #%% Building the dataset
     '''
     X: Original Feature
     Z: Feature with Missing
     M: Missing Matrix
-    Y: Label
     T: Time Gap
     '''
-    dataX = []    
+                
+    #%% Train / Test Division   
+    train_size = int(len(dataX) * train_rate)
+    
+    trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[train_size:len(dataX)])
+    trainZ, testZ = np.array(dataZ[0:train_size]), np.array(dataZ[train_size:len(dataX)])
+    trainM, testM = np.array(dataM[0:train_size]), np.array(dataM[train_size:len(dataX)])
+    trainT, testT = np.array(dataT[0:train_size]), np.array(dataT[train_size:len(dataX)])
+    
+    return [trainX, trainZ, trainM, trainT, testX, testZ, testM, testT]
+
+
+#%% Loading the data with missing values (represnted in nan)
+
+
+def Data_Loader_Incomplete(train_rate):
+    
+    #%% Normalization
+    def MinMaxScaler(data):
+        
+        numerator = data - np.nanmin(data, 0)
+        denominator = np.nanmax(data, 0) - np.nanmin(data, 0)
+        return numerator / (denominator + 1e-8)
+
+    #%% Data Preprocessing
+    xy = np.loadtxt('/home/jinsung/Documents/Jinsung/MRNN/MRNN_New_Revision/Data/GOOGLE_Missing.csv', delimiter = ",",skiprows = 1)
+    xy = xy[::-1]
+    xy = MinMaxScaler(xy)
+    x = xy
+    
+    #%% Parameters
+    seq_length = 7
+    col_no = len(x[0,:])
+    row_no = len(x[:,0]) - seq_length
+    
+    # Dataset build
+    dataX = []
+    for i in range(0, len(x[:,0]) - seq_length):
+        _x = x[i:i + seq_length]
+        dataX.append(_x)
+        
+    #%% Introduce Missingness (MCAR)
+    
     dataZ = []
-    dataY = []
     dataM = []
     dataT = []
-
-    # For each patient (total 3902 patients), 
-    for i in range(int(len(y)/3)):
-        _x = x[(3*i):(3*(i+1)),:]
-        _z = new_x[(3*i):(3*(i+1)),:]
-        _m = m[(3*i):(3*(i+1)),:]
-        _y = y[(3*i):(3*(i+1))]    
-        _td = td[(3*i):(3*(i+1))]    
+    
+    for i in range(row_no):
         
-        dataX.append(_x)
-        dataZ.append(_z)
-        dataY.append(_y)
-        dataM.append(_m)
-        dataT.append(_td)
+        #%% Missing matrix construct
+        m = np.ones([seq_length, col_no])
+        m[np.where(np.isnan(dataX[i])==1)] = 0
         
-    #%% Train / Test Dividing
+        dataM.append(m)
+        
+        #%% Introduce missingness to the original data
+        z = np.copy(dataX[i])    
+        z[np.where(m==0)] = 0
+        
+        dataZ.append(z)
+        
+        #%% Time gap generation
+        t = np.ones([seq_length, col_no])
+        for j in range(col_no):
+            for k in range(seq_length):
+                if (k > 0):
+                    if (m[k,j] == 0):
+                        t[k,j] = t[k-1,j] + 1
+                        
+        dataT.append(t)
+        
+    #%% Building the dataset
+    '''
+    X: Original Feature
+    Z: Feature with Missing
+    M: Missing Matrix
+    T: Time Gap
+    '''
+                
+    #%% Train / Test Division   
+    train_size = int(len(dataX) * train_rate)
+    
+    trainX, testX = np.array(dataX[0:train_size]), np.array(dataX[train_size:len(dataX)])
+    trainZ, testZ = np.array(dataZ[0:train_size]), np.array(dataZ[train_size:len(dataX)])
+    trainM, testM = np.array(dataM[0:train_size]), np.array(dataM[train_size:len(dataX)])
+    trainT, testT = np.array(dataT[0:train_size]), np.array(dataT[train_size:len(dataX)])
+    
+    return [trainX, trainZ, trainM, trainT, testX, testZ, testM, testT]
+    
 
-    # Number of training set
-    train_size = int(len(dataY) * train_rate)
+'''    
+#%% Data with missingness
     
-    # Random index
-    idx = np.random.permutation(len(dataY))    
-    
-    # Subset of original dataX, dataM, dataZ, dataY
-    trainX, testX = np.array([dataX[i] for i in idx[0:train_size]]), np.array([dataX[i] for i in idx[train_size:len(dataY)]])
-    trainZ, testZ = np.array([dataZ[i] for i in idx[0:train_size]]), np.array([dataZ[i] for i in idx[train_size:len(dataY)]])
-    trainM, testM = np.array([dataM[i] for i in idx[0:train_size]]), np.array([dataM[i] for i in idx[train_size:len(dataY)]])
-    trainY, testY = np.array([dataY[i] for i in idx[0:train_size]]), np.array([dataY[i] for i in idx[train_size:len(dataY)]])
-    trainT, testT = np.array([dataT[i] for i in idx[0:train_size]]), np.array([dataT[i] for i in idx[train_size:len(dataY)]])
-    
-    
-    return [trainX, trainZ, trainM, trainY, trainT, testX, testZ, testM, testY, testT]
+xy = np.loadtxt('/home/jinsung/Documents/Jinsung/MRNN/MRNN_New_Revision/Data/GOOGLE_Missing.csv', delimiter = ",",skiprows = 1)
+row_no = len(xy[:,0])
+col_no = len(xy[0,:])
 
+temp_m = np.random.uniform(0,1,[row_no, col_no]) 
+m = np.zeros([row_no, col_no])
+m[np.where(temp_m >= 0.2)] = 1
+        
+xy[np.where(m==0)] = np.nan
+
+np.savetxt('/home/jinsung/Documents/Jinsung/MRNN/MRNN_New_Revision/Data/GOOGLE_Missing.csv',xy)
+'''

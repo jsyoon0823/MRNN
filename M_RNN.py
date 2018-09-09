@@ -1,37 +1,39 @@
 '''
 Jinsung Yoon (06/19/2018)
-M-RNN Architecture
+M-RNN Architecture (Updated)
 '''
 
-#%% Packages
+#%% Necessary Packages
 import tensorflow as tf
 import numpy as np
 
 from tensorflow.python.framework import ops
 
 #%% Main Function
-def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
+
+def M_RNN (trainZ, trainM, trainT, testZ, testM, testT):
 
     # Graph Initialization
     ops.reset_default_graph()
     
     #%% Parameters
-    seq_length = len(trainX[0,:,0])
-    feature_dim = len(trainX[0,0,:])
+    seq_length = len(trainZ[0,:,0])
+    feature_dim = len(trainZ[0,0,:])
     hidden_dim = 10
     
     learning_rate = 0.01
-    iterations = 15000
+    iterations = 1000
 
-    #%% input place holders
+    #%% input place holders (Y: target, M: Mask)
     Y = tf.placeholder(tf.float32, [seq_length, None, 1])
+    M = tf.placeholder(tf.float32, [seq_length, None, 1])
     
     #%% Weights Initialization        
             
-    class Bi_LSTM_cell(object):
+    class Bi_GRU_cell(object):
     
         """
-        Bi directional LSTM cell object which takes 3 arguments for initialization.
+        Bi-directional GRU cell object which takes 3 arguments for initialization.
         input_size = Input Vector size
         hidden_layer_size = Hidden layer size
         target_size = Output vector size
@@ -77,13 +79,13 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
             # Placeholder for input vector with shape[batch, seq, embeddings]
             self._inputs = tf.placeholder(tf.float32, shape=[None, None, self.input_size], name='inputs')
     
-            # Reversing the inputs by sequence for backward pass of the LSTM
+            # Reversing the inputs by sequence for backward pass of the GRU
             self._inputs_rev = tf.placeholder(tf.float32, shape=[None, None, self.input_size], name='inputs')
     
             # Processing inputs to work with scan function
             self.processed_input = process_batch_input_for_RNN(self._inputs)
     
-            # For bacward pass of the LSTM
+            # For bacward pass of the GRU
             self.processed_input_rev = process_batch_input_for_RNN(self._inputs_rev)
     
             '''
@@ -101,8 +103,8 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
             self.initial_hidden = self._inputs[:, 0, :]
             self.initial_hidden = tf.matmul(self.initial_hidden, tf.zeros([input_size, hidden_layer_size]))
     
-        # Function for Forward LSTM cell.
-        def Lstm_f(self, previous_hidden_state, x):
+        # Function for Forward GRU cell.
+        def GRU_f(self, previous_hidden_state, x):
             """
             This function takes previous hidden state
             and memory tuple with input and
@@ -124,8 +126,8 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
             return current_hidden_state
     
     
-        # Function for Forward LSTM cell.
-        def Lstm_b(self, previous_hidden_state, x):
+        # Function for Forward GRU cell.
+        def GRU_b(self, previous_hidden_state, x):
             """
             This function takes previous hidden
             state and memory tuple with input and
@@ -144,16 +146,15 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
             current_hidden_state = tf.multiply( (1 - u), previous_hidden_state ) + tf.multiply( u, c )
     
             return current_hidden_state
-            
-    
+                
         # Function to get the hidden and memory cells after forward pass
         def get_states_f(self):
             """
             Iterates through time/ sequence to get all hidden state
             """
     
-            # Getting all hidden state throuh time
-            all_hidden_states = tf.scan(self.Lstm_f, self.processed_input, initializer=self.initial_hidden, name='states')
+            # Getting all hidden state through time
+            all_hidden_states = tf.scan(self.GRU_f, self.processed_input, initializer=self.initial_hidden, name='states')
     
             return all_hidden_states
     
@@ -162,22 +163,11 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
             """
             Iterates through time/ sequence to get all hidden state
             """
-    
-            all_hidden_states = self.get_states_f()
-    
-            # Reversing the hidden and memory state to get the final hidden and
-            # memory state
-            last_hidden_states = all_hidden_states[-1]
-    
-            # For backward pass using the last hidden and memory of the forward
-            # pass
-            initial_hidden = last_hidden_states
-    
-            # Getting all hidden state throuh time
-            all_hidden_memory_states = tf.scan(self.Lstm_b, self.processed_input_rev, initializer=initial_hidden, name='states')
+
+            all_hidden_memory_states = tf.scan(self.GRU_b, self.processed_input_rev, initializer=self.initial_hidden, name='states')    
     
             # Now reversing the states to keep those in original order
-            #all_hidden_states = tf.reverse(all_hidden_memory_states, [False, True, False])
+            all_hidden_states = tf.reverse(all_hidden_memory_states, [1])
     
             return all_hidden_states
     
@@ -228,26 +218,21 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
 
         
     # Initializing rnn object
-    rnn = Bi_LSTM_cell(3, hidden_dim, 1)
+    rnn = Bi_GRU_cell(3, hidden_dim, 1)
     
     # Getting all outputs from rnn
     outputs = rnn.get_outputs()
 
     # reshape out for sequence_loss
-    loss = tf.sqrt(tf.reduce_mean(tf.square(outputs - Y)))
+    loss = tf.sqrt(tf.reduce_mean(tf.square(M*outputs - M*Y)))
 
     #
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train = optimizer.minimize(loss)
-
-    # RMSE
-    targets = tf.placeholder(tf.float32, [None, seq_length, feature_dim])
-    predictions = tf.placeholder(tf.float32, [None, seq_length, feature_dim])
-    rmse = tf.sqrt(tf.reduce_mean(tf.square(targets - predictions)))
-
+    
     # Output Initialization
-    final_results_train = np.zeros([len(trainX), seq_length, feature_dim])
-    final_results_test = np.zeros([len(testX), seq_length, feature_dim])
+    final_results_train = np.zeros([len(trainZ), seq_length, feature_dim])
+    final_results_test = np.zeros([len(testZ), seq_length, feature_dim])
 
     # Sessions
     sess = tf.Session()
@@ -258,66 +243,92 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
         # Training step
         for i in range(iterations):
 
-            Input_Temp = np.reshape(np.concatenate((trainZ[:,:,f],trainM[:,:,f],trainT[:,:,f]),0),[len(trainX), seq_length, 3]) 
+            Input_Temp = np.dstack((trainZ[:,:,f],trainM[:,:,f],trainT[:,:,f]))            
+            
             Input_Temp_Rev = np.flip(Input_Temp, 1)
             
-            Input = np.zeros([len(trainX), seq_length, 3]) 
-            Input[:,1:,:] = Input_Temp[:,:2,:] 
+            Input = np.zeros([len(trainZ), seq_length, 3]) 
+            Input[:,1:,:] = Input_Temp[:,:6,:] 
             
-            Input_Rev = np.zeros([len(trainX), seq_length, 3]) 
-            Input_Rev[:,1:,:] = Input_Temp_Rev[:,:2,:] 
+            Input_Rev = np.zeros([len(trainZ), seq_length, 3]) 
+            Input_Rev[:,1:,:] = Input_Temp_Rev[:,:6,:] 
             
-            _, step_loss = sess.run([train, loss], feed_dict={Y: np.reshape(trainX[:,:,f],[seq_length, len(trainX), 1]),
+            _, step_loss = sess.run([train, loss], feed_dict={M: np.transpose(np.dstack(trainM[:,:,f]),[1, 2, 0]), 
+                                    Y: np.transpose(np.dstack(trainZ[:,:,f]),[1, 2, 0]),
                                     rnn._inputs: Input, rnn._inputs_rev: Input_Rev})
             
             if i % 100 == 0:
                 print("[step: {}] loss: {}".format(i, step_loss))
 
-        # Train step
+        #%% Fill in the missing values 
+        #Train prediction
 
-        Input_Temp = np.reshape(np.concatenate((trainZ[:,:,f],trainM[:,:,f],trainT[:,:,f]),0),[len(trainX), seq_length, 3]) 
+        Input_Temp = np.dstack((trainZ[:,:,f],trainM[:,:,f],trainT[:,:,f]))  
+
         Input_Temp_Rev = np.flip(Input_Temp, 1)
             
-        Input = np.zeros([len(trainX), seq_length, 3]) 
-        Input[:,1:,:] = Input_Temp[:,:2,:] 
+        Input = np.zeros([len(trainZ), seq_length, 3]) 
+        Input[:,1:,:] = Input_Temp[:,:(seq_length-1),:] 
             
-        Input_Rev = np.zeros([len(trainX), seq_length, 3]) 
-        Input_Rev[:,1:,:] = Input_Temp_Rev[:,:2,:] 
+        Input_Rev = np.zeros([len(trainZ), seq_length, 3]) 
+        Input_Rev[:,1:,:] = Input_Temp_Rev[:,:(seq_length-1),:] 
 
         train_predict = sess.run(outputs, feed_dict={rnn._inputs: Input, rnn._inputs_rev: Input_Rev})
-        final_results_train[:,:,f] = np.reshape(train_predict, [len(trainX), seq_length])
+        final_results_train[:,:,f] = np.transpose(np.squeeze(train_predict))
         
-        # Test step
+        # Test prediction
         
-        Input_Temp = np.reshape(np.concatenate((testZ[:,:,f],testM[:,:,f],testT[:,:,f]),0),[len(testX), seq_length, 3]) 
+        Input_Temp = np.dstack((testZ[:,:,f],testM[:,:,f],testT[:,:,f]))  
         Input_Temp_Rev = np.flip(Input_Temp, 1)
             
-        Input = np.zeros([len(testX), seq_length, 3]) 
-        Input[:,1:,:] = Input_Temp[:,:2,:] 
+        Input = np.zeros([len(testZ), seq_length, 3]) 
+        Input[:,1:,:] = Input_Temp[:,:(seq_length-1),:] 
             
-        Input_Rev = np.zeros([len(testX), seq_length, 3]) 
-        Input_Rev[:,1:,:] = Input_Temp_Rev[:,:2,:]       
+        Input_Rev = np.zeros([len(testZ), seq_length, 3]) 
+        Input_Rev[:,1:,:] = Input_Temp_Rev[:,:(seq_length-1),:]       
         
         test_predict = sess.run(outputs, feed_dict={rnn._inputs: Input, rnn._inputs_rev: Input_Rev})
-        final_results_test[:,:,f] = np.reshape(test_predict, [len(testX), seq_length])
+        final_results_test[:,:,f] = np.transpose(np.squeeze(test_predict))
     
+    #%% Initial point interpolation (Only for the performance)
+    # If the first variable is missing, interpolate
+
+    for i in range(len(trainZ[:,0,0])):
+        for k in range(len(trainZ[0,0,:])):
+            for j in range(len(trainZ[0,:,0])):
+                if (trainT[i,j,k] > j):
+                    idx = np.where(trainM[i,:,k]==1)[0]
+                    final_results_train[i,j,k] = trainZ[i,np.min(idx),k]
+                    
+                    
+    for i in range(len(testZ[:,0,0])):
+        for k in range(len(testZ[0,0,:])):
+            for j in range(len(testZ[0,:,0])):
+                if (testT[i,j,k] > j):
+                    idx = np.where(testM[i,:,k]==1)[0]
+                    final_results_test[i,j,k] = testZ[i,np.min(idx),k]    
     
     #%%
+    output_train = final_results_train
+    output_test = final_results_test     
+    
+    
+    #%% Fully Connected Layers
 
     # Change the data structure
-    Train_No = len(trainX[:,0,0])
-    Test_No = len(testX[:,0,0])
-    Seq_No = len(trainX[0,:,0])
-    Dim_No = len(trainX[0,0,:])
+    Train_No = len(trainZ[:,0,0])
+    Test_No = len(testZ[:,0,0])
+    Seq_No = len(trainZ[0,:,0])
+    Dim_No = len(trainZ[0,0,:])
             
-    rec_trainX = final_results_train * (1-trainM) + trainX * trainM
-    rec_testX = final_results_test * (1-testM) + testX * testM
+    rec_trainZ = final_results_train
+    rec_testZ = final_results_test
 
-    col_trainX = np.reshape(trainX, [Train_No * Seq_No, Dim_No])
-    col_rec_trainX = np.reshape(rec_trainX, [Train_No * Seq_No, Dim_No])
+    col_trainZ = np.reshape(trainZ, [Train_No * Seq_No, Dim_No])
+    col_rec_trainZ = np.reshape(rec_trainZ, [Train_No * Seq_No, Dim_No])
     
-    col_testX = np.reshape(testX, [Test_No * Seq_No, Dim_No])
-    col_rec_testX = np.reshape(rec_testX, [Test_No * Seq_No, Dim_No])
+    col_testZ = np.reshape(testZ, [Test_No * Seq_No, Dim_No])
+    col_rec_testZ = np.reshape(rec_testZ, [Test_No * Seq_No, Dim_No])
     
     col_trainM = np.reshape(trainM, [Train_No * Seq_No, Dim_No])
     col_testM = np.reshape(testM, [Test_No * Seq_No, Dim_No])
@@ -328,40 +339,37 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
     feature_dim = Dim_No
     
     learning_rate = 0.01
-    iterations = 50000
+    iterations = 4000
 
-    hidden_no = int(Dim_No/2)
+    hidden_no = Dim_No
 
     # input place holders
-    X = tf.placeholder(tf.float32, [None, feature_dim])
-    Z = tf.placeholder(tf.float32, [None, feature_dim * 2])
+    Y = tf.placeholder(tf.float32, [None, feature_dim])
+    Z = tf.placeholder(tf.float32, [None, feature_dim])
+    M = tf.placeholder(tf.float32, [None, feature_dim])
+    keep_prob = tf.placeholder(tf.float32)
 
     # build a FC network
-    W1 = tf.get_variable("W1", shape=[feature_dim * 2, hidden_no],initializer=tf.contrib.layers.xavier_initializer())
-    b1 = tf.Variable(tf.random_normal([hidden_no]))
-    L1 = tf.nn.relu(tf.matmul(Z, W1) + b1)
-
-    W2 = tf.get_variable("W2", shape=[hidden_no, hidden_no],initializer=tf.contrib.layers.xavier_initializer())
-    b2 = tf.Variable(tf.random_normal([hidden_no]))
-    L2 = tf.nn.relu(tf.matmul(L1, W2) + b2)
-
-    W3 = tf.get_variable("W3", shape=[hidden_no, feature_dim],initializer=tf.contrib.layers.xavier_initializer())
-    b3 = tf.Variable(tf.random_normal([feature_dim]))
-    hypothesis = tf.matmul(L2, W3) + b3
+    U = tf.get_variable("U", shape=[feature_dim, hidden_no],initializer=tf.contrib.layers.xavier_initializer())
+    V1 = tf.get_variable("V1", shape=[feature_dim, hidden_no],initializer=tf.contrib.layers.xavier_initializer())
+    V2 = tf.get_variable("V2", shape=[feature_dim, hidden_no],initializer=tf.contrib.layers.xavier_initializer())
+    b = tf.Variable(tf.random_normal([hidden_no]))
+    
+    L1 = tf.nn.sigmoid((tf.matmul(Y,tf.matrix_set_diag(U, np.zeros([feature_dim,]))) + tf.matmul(Z, tf.matrix_set_diag(V1, np.zeros([feature_dim,]))) + tf.matmul(M, V2) + b))  
+    L1D = tf.nn.dropout(L1, keep_prob)
+    
+    W = tf.Variable(tf.random_normal([feature_dim]))
+    a = tf.Variable(tf.random_normal([feature_dim]))
+    hypothesis = W * L1D + a
 
     outputs = tf.nn.sigmoid(hypothesis)
     
     # reshape out for sequence_loss
-    loss = tf.sqrt(tf.reduce_mean(tf.square(outputs - X)) )
+    loss = tf.sqrt(tf.reduce_mean(tf.square(M*outputs - M*Y)) )
 
     # Optimizer
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train = optimizer.minimize(loss)
-
-    # RMSE
-    targets = tf.placeholder(tf.float32, [None, feature_dim])
-    predictions = tf.placeholder(tf.float32, [None, feature_dim])
-    rmse = tf.sqrt(tf.reduce_mean(tf.square(targets - predictions)))
 
     # Sessions
     sess = tf.Session()
@@ -369,26 +377,43 @@ def M_RNN (trainX, trainZ, trainM, trainT, testX, testZ, testM, testT):
         
     # Training step
     for i in range(iterations):
-        _, step_loss = sess.run([train, loss], feed_dict={X: col_trainX, Z: np.concatenate((col_rec_trainX, col_trainM),1)})
+        _, step_loss = sess.run([train, loss], feed_dict={Y: col_trainZ, Z: col_rec_trainZ, M: col_trainM, keep_prob: 1.0})
         
         if i % 100 == 0:
             print("[step: {}] loss: {}".format(i, step_loss))
 
         # Test step
-    train_predict = sess.run(outputs, feed_dict={Z: np.concatenate((col_rec_trainX, col_trainM),1)})
-    test_predict = sess.run(outputs, feed_dict={Z: np.concatenate((col_rec_testX, col_testM),1)})
-        
-    rmse_val = sess.run(rmse, feed_dict={targets: col_testX, predictions: test_predict})
-    print("RMSE: {}".format(rmse_val))
+    train_predict = sess.run(outputs, feed_dict={Y: col_trainZ, Z: col_rec_trainZ, M: col_trainM, keep_prob: 1.0})
+    test_predict = sess.run(outputs, feed_dict={Y: col_testZ, Z: col_rec_testZ, M: col_testM, keep_prob: 1.0})
     
     output_train_temp = np.reshape(train_predict,[Train_No, Seq_No, feature_dim])
     output_test_temp = np.reshape(test_predict,[Test_No, Seq_No, feature_dim])
 
-    output_train = output_train_temp * (1-trainM) + trainX * trainM
-    output_test = output_test_temp * (1-testM) + testX * testM
+    #%%
+    output_train = output_train_temp * (1-trainM) + trainZ * trainM
+    output_test = output_test_temp * (1-testM) + testZ * testM
+       
 
+    #%% Initial point interpolation (Only for the performance)
+    # If the first variable is missing, interpolate
 
-    #%%    
-    
+    for i in range(len(trainZ[:,0,0])):
+        for k in range(len(trainZ[0,0,:])):
+            for j in range(len(trainZ[0,:,0])):
+                if (trainT[i,j,k] > j):
+                    idx = np.where(trainM[i,:,k]==1)[0]
+                    final_results_train[i,j,k] = trainZ[i,np.min(idx),k]
+                    
+                    
+    for i in range(len(testZ[:,0,0])):
+        for k in range(len(testZ[0,0,:])):
+            for j in range(len(testZ[0,:,0])):
+                if (testT[i,j,k] > j):
+                    idx = np.where(testM[i,:,k]==1)[0]
+                    final_results_test[i,j,k] = testZ[i,np.min(idx),k]
+        
     return [output_train, output_test]
+     
 
+#%%
+ 
