@@ -28,49 +28,6 @@ python3 -m main_mrnn.py.
 -   learning_rate: learning rate of model training
 -   metric_name: imputation performance metric
 
-
-  # Inputs for the main function
-  parser = argparse.ArgumentParser()
-  parser.add_argument(
-      '--file_name',
-      default='data/google.csv',
-      type=str)
-  parser.add_argument(
-      '--seq_len',
-      help='sequence length of time-series data',
-      default=7,
-      type=int)
-  parser.add_argument(
-      '--missing_rate',
-      help='the rate of introduced missingness',
-      default=0.2,
-      type=float)
-  parser.add_argument(
-      '--h_dim',
-      help='hidden state dimensions',
-      default=10,
-      type=int)
-  parser.add_argument(
-      '--batch_size',
-      help='the number of samples in mini batch',
-      default=128,
-      type=int)
-  parser.add_argument(
-      '--iteration',
-      help='the number of iteration',
-      default=2000,
-      type=int)
-  parser.add_argument(
-      '--learning_rate',
-      help='learning rate of model training',
-      default=0.01,
-      type=float)
-  parser.add_argument(
-      '--metric_name',
-      help='imputation metric',
-      default='rmse',
-      type=str)
-
 ### Example command
 
 ```shell
